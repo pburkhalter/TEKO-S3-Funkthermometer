@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="d1ea55c9-2f05-4f1c-8fb2-035140ce7e83" name="pi.home">
+        <fileTransfer rootFolder="/home/patrik.burkhalter/433decoder" accessType="SFTP" host="pi.home" port="22" sshConfigId="fa5c8324-8f2d-466a-b05d-5a35a45d202b" sshConfig="patrik.burkhalter@pi.home:22 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
