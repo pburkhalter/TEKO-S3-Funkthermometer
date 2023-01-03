@@ -73,7 +73,8 @@ class Decoder:
             level = item[1]
 
             distance = 0
-            if i > 0: distance = int(items[i - 1][0])
+            if i > 0:
+                distance = int(items[i - 1][0])
 
             calculated_time = time - distance
             normalized_time = self.timedelta[min(range(len(self.timedelta)),
