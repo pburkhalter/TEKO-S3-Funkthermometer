@@ -25,7 +25,7 @@ class DatabaseConnector:
     def setup(self):
         try:
             self.__connection.execute("""
-                CREATE TABLE DATA (
+                CREATE TABLE data IF NOT EXISTS (
                     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
                     timestamp DATE,
                     temperature INTEGER,
@@ -33,21 +33,33 @@ class DatabaseConnector:
                     station TEXT,
                 );
             """)
-        except DatabaseError:
+        except sqlite.Error as er:
             raise DatabaseError("Something went wrong while setting up the database")
-        except ConnectionError:
-            raise DatabaseError("Database connection not yet initiated")
 
-    def add(self, timestamp, temperature, humidity, station):
+    def get(self, order="ROWID", sort="DESC", limit=1):
+        try:
+            self.__connection.execute("""
+                SELECT * from data ORDER BY ? ? LIMIT ?
+            """, (order, sort, limit))
+        except sqlite.Error as er:
+            raise DatabaseError("Something went wrong while reading from the database")
+
+    def add(self, sid, timestamp, temperature, humidity, station):
+        try:
+            self.__connection.execute("""
+                INSERT INTO data (id ,timestamp ,temperature ,humidity ,station)
+                VALUES (?, ?, ?, ?, ?);
+            """, (sid, timestamp, temperature, humidity, station))
+        except sqlite.Error as er:
+            raise DatabaseError("Something went wrong while adding data to the database")
+
+    def remove(self, sid):
         pass
 
-    def remove(self, id):
+    def clean(self):
         pass
 
-    def get(self, id):
-        pass
-
-    def filter(self, statement):
+    def drop(self):
         pass
 
     def __iter__(self):

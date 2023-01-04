@@ -1,5 +1,6 @@
 import itertools
 import time
+from datetime import datetime
 from pprint import pprint
 
 from bitstring import BitArray
@@ -24,21 +25,27 @@ class SignalDecoder:
 
     def __init__(self, queue, db):
         self.pulse_length = [0, 250, 500, 750, 1000]
-        self.separate_by_timeout = 2000
+        self.part_timeout = 2000
 
         self.queue = queue
         self.db = db
 
-        self.__running = True
-        self.__signals = dict()
+        # create initial group
+        self.__group = SignalGroup()
+
+        self.__running = False
         self.__distance = 0
-        self.__verify_group = None
-        self.__group = 0
-        self.__part = 0
+        self.__timestamp = 0
 
         self.start()
 
     def start(self):
+
+        # db connection
+        self.db.connect()
+        self.db.setup()
+
+        # loop
         self.__running = True
         while self.__running:
             if not self.queue.empty():
@@ -51,113 +58,56 @@ class SignalDecoder:
         self.__running = False
 
     def decode(self, item):
-        normalized = self.normalize(item)
-        filtered = self.filter(normalized)
+        timestamp, level = item
 
-        if filtered:
-            group = self.__group
-            part = self.__part
-            timestamp = filtered[0]
-            level = filtered[1]
+        # check if distance to previous group is bigger than
+        # predefined timeout (offset) and create new group (and part)
+        if timestamp > (self.__distance + self.part_timeout):
+            self.__group.validate()
+            self.save()
+            self.__group = SignalGroup()
 
-            self.create(group, part)
-            self.append(group, part, level)
+        duration, level = self.normalize(timestamp, level)
 
-        if self.__verify_group:
-            verified = self.verify()
+        # indicating the end of the current part
+        # and a possible beginning of new part
+        if duration >= 750:
+            # this will be called multiple times, but we
+            # prevent adding multiple empty parts in SignalGroup
+            self.__group.add()
 
-            for result in verified:
-                self.out(verified[result])
+        # indicating a valid signal
+        if duration == 500:
+            self.__group.extend_last_part(level)
 
-        # self.save(group)
+        self.save()
 
-    def normalize(self, item):
-        timestamp = item[0]
-        level = item[1]
-
-        if timestamp > (self.__distance + self.separate_by_timeout):
-            self.__verify_group = self.__group
-            self.__group += 1
-
-        calculated_time = timestamp - self.__distance
-        normalized_time = self.pulse_length[min(range(len(self.pulse_length)),
-                                                key=lambda j: abs(self.pulse_length[j] - calculated_time))]
+    def normalize(self, timestamp, level):
+        calculated_duration = timestamp - self.__distance
+        normalized_duration = self.pulse_length[min(range(len(self.pulse_length)),
+                                                key=lambda j: abs(self.pulse_length[j] - calculated_duration))]
 
         self.__distance = timestamp
 
-        return [normalized_time, level]
-
-    def filter(self, normalized):
-        timestamp = normalized[0]
-        level = normalized[1]
-
-        if timestamp >= 750:
-            self.__part += 1
-        elif timestamp >= 500:
-            return [timestamp, level]
-        else:
-            return False
-
-    def create(self, group, part):
-        if group not in self.__signals:
-            self.__signals[group] = dict()
-
-        subdicts = {
-            "timestamp": time.time(),
-            "validated": False,
-            "parts": dict()
-        }
-
-        for key in subdicts:
-            if key not in self.__signals[group]:
-                self.__signals[group][key] = subdicts[key]
-
-        if part not in self.__signals[group]["parts"]:
-            self.__signals[group]["parts"][part] = []
-
-    def append(self, group, part, level):
-        self.__signals[group]["parts"][part].append(level)
-
-    def verify(self):
-        results = dict()
-
-        for group in self.__signals.copy():
-            compared = []
-
-            for part in self.__signals[group]["parts"].copy():
-                # A valid signal consists of 36 bits. Delete parts that
-                # don't have exactly 36 bits to filter out bad parts
-                if len(self.__signals[group]["parts"][part]) != 36:
-                    del self.__signals[group]["parts"][part]
-                else:
-                    compared.append(self.__signals[group]["parts"][part])
-
-            # group lists by frequency to hopefully find the correct
-            # signal, as we don't know how to compute the FCS (yet)
-            verified = [list(i) for j, i in itertools.groupby(sorted(compared))]
-
-            timestamp = self.__signals[group]["timestamp"]
-            results[timestamp] = max(verified[0], key=len)
-
-            # Delete group when we are done with it
-            del self.__signals[group]
-
-        self.__verify_group = None
-        return results
-
+        return [normalized_duration, level]
 
     def save(self):
-        # self.db
-        pass
+        # self.db.add( ........ )
+        self.out(self.__group)
 
-    def out(self, signal):
+    def out(self, signal_object):
+
+        signal = signal_object.signal
+
+        if not signal:
+            return False
 
         id1 = "".join(map(str, signal[0:4]))
-        ch = "".join(map(str, signal[4:6]))
-        id2 = "".join(map(str, signal[6:8]))
+        id2 = "".join(map(str, signal[4:6]))
+        ch = "".join(map(str, signal[6:8]))
         v = "".join(map(str, signal[8:9]))
         tr = "".join(map(str, signal[9:11]))
-        b = "".join(map(str, signal[11:12]))
+        st = "".join(map(str, signal[11:12]))
         temp1 = "".join(map(str, signal[12:16]))
         temp2 = "".join(map(str, signal[16:20]))
         temp3 = "".join(map(str, signal[20:24]))
@@ -165,15 +115,28 @@ class SignalDecoder:
         hum2 = "".join(map(str, signal[28:32]))
         fcs = "".join(map(str, signal[32:36]))
 
-        if id2 == "00":
+        if st == "1":
             station = "T2"
-        else:
+        elif st == "0":
             station = "T1"
-
-        if b == "1":
-            battery = "OK"
         else:
+            station = "Undefined"
+
+        if v == "1":
+            battery = "OK"
+        elif v == "0":
             battery = "Low"
+        else:
+            battery = "Undefined"
+
+        if tr == "11":
+            trend = "Rising"
+        elif tr == "10":
+            trend = "Constant"
+        elif tr == "01":
+            trend = "Falling"
+        else:
+            trend = "Undefined"
 
         temperature = BitArray(bin=temp1 + temp2 + temp3)
         temperature.invert()
@@ -181,19 +144,121 @@ class SignalDecoder:
         humidity = BitArray(bin=hum1 + hum2)
         humidity.invert()
 
+        #Date
+        dto = datetime.fromtimestamp(signal_object.timestamp)
+        dts = dto.strftime("%m/%d/%Y, %H:%M:%S")
+
         print("-" * 65)
-        print("Temperature Recording: Station " + station + " @time (todo...)")
+        print("Temperature Recording: Station " + station + " @ " + dts)
         print("-" * 65)
 
-        print("Signal Encoded: " + id1 + " " + ch + " " + id2 + " " + v + " " + tr + " " + b + " " + temp1 + " " + temp2 + " " + temp3 + " " + hum1 + " " + hum2 + " " + fcs)
+        print("Signal Encoded: " + id1 + " " + st + " " + ch + " " + v + " " + tr + " " + id2 + " " + temp1 + " " + temp2 + " " + temp3 + " " + hum1 + " " + hum2 + " " + fcs)
 
         print("Signal Decoded:")
-        print("ID:\t\t\t" + str(BitArray(bin=id1).uint))
+        print("ID1:\t\t\t" + str(BitArray(bin=id1).uint))
+        print("ID2:\t\t\t" + str(BitArray(bin=id2).uint))
         print("Channel:\t\t" + str(BitArray(bin=ch).uint))
-        print("Station:\t\t" + station)
         print("Battery:\t\t" + battery)
-        print("Trend?:\t\t\t" + str(BitArray(bin=tr).uint))
-        print("Button?:\t\t" + str(BitArray(bin=b).uint))
+        print("Trend:\t\t\t" + trend)
+        print("Station:\t\t" + station)
         print("Temperature:\t\t" + str((temperature.uint - 500) / 10) + "°C")
         print("Humidity:\t\t" + str(humidity.uint / 10) + "%")
         print("FCS:\t\t\t" + fcs)
+
+
+class SignalPart:
+    def __init__(self):
+        self._bits = []
+        self._validated = False
+
+    def append(self, bit: int):
+        self._bits.append(bit)
+
+    def delete(self, position: int):
+        del self._bits[position]
+
+    def validate(self):
+        # A valid signal consists of 36 bits. Return false if
+        # we don't have exactly 36 bits to filter them out
+        if len(self._bits) == 36:
+            self._validated = True
+        else:
+            self._validated = False
+
+        return self._validated
+
+    @property
+    def valid(self):
+        return self.validate()
+
+    def __len__(self):
+        return len(self._bits)
+
+
+class SignalGroup:
+    def __init__(self):
+        self._signal = []
+        self._parts = []
+
+        self._validated = False
+        self._timestamp = datetime.now().timestamp()
+
+        # add initial part
+        self._parts.append(SignalPart())
+
+    def add(self):
+        # prevent adding a new part if the last part is empty
+        if len(self._parts[len(self._parts) - 1]) != 0:
+            part = SignalPart()
+            self._parts.append(part)
+
+    def append(self, part: SignalPart):
+        self._parts.append(part)
+
+    def extend_last_part(self, level):
+        self._parts[len(self._parts) - 1].append(level)
+
+    def delete(self, position: int):
+        del self._parts[position]
+
+    def validate(self):
+        parts_list = []
+        for i, part in enumerate(self._parts):
+            # A valid signal consists of 36 bits. Delete parts that
+            # don't have exactly 36 bits to filter them out
+            if part.valid:
+                parts_list.append(part._bits)
+
+        # group lists by frequency to hopefully find the correct
+        # signal, as we don't know how to compute the FCS (yet)
+        verified = [list(i) for j, i in itertools.groupby(sorted(parts_list))]
+
+        if verified:
+            self._signal = max(verified[0], key=len)
+            self._validated = True
+
+        return self._signal
+
+    @property
+    def valid(self):
+        return self.validate()
+
+    @property
+    def timestamp(self):
+        return self._timestamp
+
+    @property
+    def parts(self):
+        return self._parts
+
+    @property
+    def signal(self):
+        return self._signal
+
+    @property
+    def last_part(self):
+        return self._parts[len(self._parts) - 1]
+
+    def __len__(self):
+        return len(self._parts)
+

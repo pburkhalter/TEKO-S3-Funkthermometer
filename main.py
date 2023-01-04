@@ -2,6 +2,7 @@ import time
 from multiprocessing import Process, Queue
 from decoder import SignalDecoder
 from database import DatabaseConnector
+from restapi import run_server
 from datetime import datetime
 import RPi.GPIO as GPIO
 import argparse
@@ -56,22 +57,32 @@ def setup_callback(cb):
 
 
 def start_decoder(qq, dba):
-    reader_process = Process(target=SignalDecoder, args=(qq, dba))
-    reader_process.daemon = True
-    reader_process.start()
+    process = Process(target=SignalDecoder, args=(qq, dba))
+    process.daemon = True
+    process.start()
+    return process
 
-    return reader_process
+
+def start_restapi(qq):
+    process = Process(target=run_server, args=(qq))
+    process.daemon = True
+    process.start()
+    return process
 
 
 if __name__ == '__main__':
     print("This is a simple decoder for raw data captured on GPIO pin " + str(GPIO_PIN))
 
-    mq = Queue()
+    decoder_queue = Queue()
+    restapi_queue = Queue()
+
     db = DatabaseConnector()
 
     setup_callback(callback)
 
-    decoder_process = start_decoder(mq, db)
+    restapi_process = start_restapi(restapi_queue)
+    decoder_process = start_decoder(decoder_queue, db)
+
     decoder_process.join()
 
     while True:
