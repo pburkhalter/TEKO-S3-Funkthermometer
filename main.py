@@ -47,7 +47,7 @@ def callback(channel):
     # Callback for GPIO event detection
     level = GPIO.input(channel)
     timestamp = datetime.now().microsecond
-    mq.put([timestamp, level])
+    decoder_queue.put([timestamp, level])
 
 
 def setup_callback(cb):
@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
     setup_callback(callback)
 
-    restapi_process = start_restapi(restapi_queue)
+    #restapi_process = start_restapi(restapi_queue)
     decoder_process = start_decoder(decoder_queue, db)
 
     decoder_process.join()

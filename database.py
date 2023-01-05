@@ -25,12 +25,12 @@ class DatabaseConnector:
     def setup(self):
         try:
             self.__connection.execute("""
-                CREATE TABLE data IF NOT EXISTS (
+                CREATE TABLE IF NOT EXISTS data (
                     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
                     timestamp DATE,
                     temperature INTEGER,
                     humidity INTEGER,
-                    station TEXT,
+                    station TEXT
                 );
             """)
         except sqlite.Error as er:
