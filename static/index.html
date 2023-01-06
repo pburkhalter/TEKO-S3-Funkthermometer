@@ -1,0 +1,91 @@
+<html>
+  <head>
+    <title>Temperature Chart</title>
+    <script type="text/javascript" src="./chart.min.js"></script>
+    <script type="text/javascript" src="./chartjs-adapter-date-fns.bundle.min.js"></script>
+  </head>
+  <body>
+    <canvas id="TemperatureChart" width="1400" height="800" style="padding: 0; margin: auto; display: block;}"></canvas>
+    <script>
+      var ctx = document.getElementById('TemperatureChart').getContext('2d');
+      var chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+              label: 'Temperatur Station T1',
+              backgroundColor: 'rgb(255, 99, 132)',
+              borderColor: 'rgb(255, 99, 132)',
+              data: []
+            },
+            {
+              label: 'Luftfeuchtigkeit Station T1',
+              backgroundColor: 'rgb(255, 99, 132)',
+              borderColor: 'rgb(255, 99, 132)',
+              borderDash: [5, 5],
+              data: []
+            },
+            {
+              label: 'Temperatur Station T2',
+              backgroundColor: 'rgb(54, 162, 235)',
+              borderColor: 'rgb(54, 162, 235)',
+              data: []
+            },
+            {
+              label: 'Luftfeuchtigkeit Station T2',
+              backgroundColor: 'rgb(54, 162, 235)',
+              borderColor: 'rgb(54, 162, 235)',
+              borderDash: [5, 5],
+              data: []
+            }
+          ]
+        },
+        options: {
+          responsive: false,
+          plugins: {},
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Zeit'
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Temperatur / Luftfeuchtigkeit'
+              },
+              suggestedMin: "15",
+              suggestedMax: "25"
+            }
+          }
+        }
+      });
+
+      // Load data from external file
+      function loadData() {
+        var xhr = new XMLHttpRequest();
+        xhr.onload = function() {
+          let data = JSON.parse(xhr.responseText);
+
+          chart.data.datasets[0].data = data['t1'];
+          chart.data.datasets[1].data = data['h1'];
+          chart.data.datasets[2].data = data['t2'];
+          chart.data.datasets[3].data = data['h2'];
+          chart.data.labels = data['labels'];
+
+          chart.update();
+        };
+        xhr.open('GET', '/chart');
+        xhr.send();
+      }
+
+      // Poll for new data every 5 seconds
+      setInterval(loadData, 5000);
+      loadData();
+    </script>
+  </body>
+</html>
+
+
+

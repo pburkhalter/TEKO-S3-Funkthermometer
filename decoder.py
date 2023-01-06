@@ -40,6 +40,7 @@ class SignalDecoder:
     def start(self):
         # db connection
         self.db.connect()
+        self.db.drop()
         self.db.setup()
 
         # loop
@@ -62,11 +63,8 @@ class SignalDecoder:
         # valid signal to save and will create a new group afterwards
         if timestamp > (self.__distance + self.part_timeout):
             if self.group.valid:
-                print("Group valid...")
-                #self.save(self.group) TODO
+                self.save(self.group)
                 self.out(self.group)
-            else:
-                print("Group not valid...")
 
             # create a new group (reset)
             self.group = SignalGroup()
@@ -94,27 +92,26 @@ class SignalDecoder:
 
     def save(self, group):
         self.db.add(
-            group.id,
             group.station,
-            group.timestamp,
+            group.datestring,
             group.temperature,
             group.humidity,
         )
 
     def out(self, group):
-        print("-" * 65)
+        print("-" * 80)
         print("Temperature Recording: Station " + group.station + " @ " + group.datestring)
-        print("-" * 65)
+        print("-" * 80)
+        print("Signal Descrip: " + "Ch   -- ID ?? B  ^Temperature   Humidity  ????")
         print("Signal Encoded: " + group.bitstring)
+        print(" ")
         print("Signal Decoded:")
-        print("ID1:\t\t\t" + group.id)
-        print("ID2:\t\t\t" + group.id)
-        print("Channel:\t\t" + group.channel)
-        print("Battery:\t\t" + group.battery)
-        print("Trend:\t\t\t" + group.trend)
+        print("Channel:\t\t" + str(group.channel))
         print("Station:\t\t" + group.station)
+        print("Battery:\t\t" + group.battery)
         print("Temperature:\t\t" + str(group.temperature) + "°C")
         print("Humidity:\t\t" + str(group.humidity) + "%")
+        print("-" * 80)
 
 
 class SignalPart:
@@ -154,10 +151,8 @@ class SignalGroup:
 
         # computed attributes
         self.__bitstring = None
-        self.__id = None
         self.__channel = None
         self.__battery = None
-        self.__trend = None
         self.__station = None
         self.__temperature = None
         self.__humidity = None
@@ -202,60 +197,64 @@ class SignalGroup:
 
         # get the corresponding bits
         _bitstring = "".join(map(str, signal))
-        _id1 = "".join(map(str, signal[0:4]))
-        _id2 = "".join(map(str, signal[4:6]))
-        _channel = "".join(map(str, signal[6:8]))
-        _battery = "".join(map(str, signal[8:9]))
-        _trend = "".join(map(str, signal[9:11]))
-        _station = "".join(map(str, signal[11:12]))
-        _temperature = "".join(map(str, signal[12:24]))
-        _humidity = "".join(map(str, signal[24:32]))
-        _fcs = "".join(map(str, signal[32:36]))
+        _bitparts = [
+            _bitstring[0:4],
+            _bitstring[4:6],
+            _bitstring[6:8],
+            _bitstring[8:10],
+            _bitstring[10:12],
+            _bitstring[12:16],
+            _bitstring[16:20],
+            _bitstring[20:24],
+            _bitstring[24:28],
+            _bitstring[28:32],
+            _bitstring[32:36]
+        ]
 
-        # calculate temperature
-        temperature = BitArray(bin=_temperature)
-        temperature.invert()
-        temperature = (temperature.uint - 500) / 10
+        # Bitstring with visual separation
+        bitstring_separated = " ".join(_bitparts)
 
-        # calculate humidity
-        humidity = BitArray(bin=_humidity)
-        humidity.invert()
-        humidity = humidity.uint / 10
-
-        # format datetime string
-        datetime_ms = datetime.fromtimestamp(self._timestamp)
-        datetime_str = datetime_ms.strftime("%m/%d/%Y, %H:%M:%S")
-
-        if _station == "0":
+        # Station
+        station = _bitstring[6:8]
+        if station == "00":
             station = "T1"
-        elif _station == "1":
+        elif station == "01":
             station = "T2"
         else:
             station = "Undefined"
 
-        if _battery == "1":
+        # Battery
+        battery = _bitstring[10:12]
+        if battery == "10":
             battery = "OK"
-        elif _battery == "0":
+        elif battery == "01":
             battery = "Low"
         else:
             battery = "Undefined"
 
-        if _trend == "11":
-            trend = "Rising"
-        elif _trend == "10":
-            trend = "Constant"
-        elif _trend == "01":
-            trend = "Falling"
-        else:
-            trend = "Undefined"
+        # Channel
+        channel = BitArray(bin=_bitstring[0:4])
+        channel = channel.uint
 
-        self.__bitstring = _bitstring
+        # Temperature
+        temperature = BitArray(bin=_bitstring[13:24])
+        temperature.invert()
+        temperature = (temperature.uint - 500) / 10
+
+        # Humidity
+        humidity = BitArray(bin=_bitstring[24:32])
+        humidity.invert()
+        humidity = (humidity.uint / 10) + 50
+
+        # Datetime string
+        datetime_ms = datetime.fromtimestamp(self._timestamp)
+        datetime_str = datetime_ms.strftime("%m/%d/%Y, %H:%M:%S")
+
+        self.__bitstring = bitstring_separated
         self.__temperature = temperature
         self.__humidity = humidity
-        self.__id = _id1
-        self.__channel = _channel
+        self.__channel = channel
         self.__battery = battery
-        self.__trend = trend
         self.__station = station
         self.__datestring = datetime_str
 
@@ -275,20 +274,12 @@ class SignalGroup:
         return self.__bitstring
 
     @property
-    def id(self):
-        return self.__id
-
-    @property
     def channel(self):
         return self.__channel
 
     @property
     def battery(self):
         return self.__battery
-
-    @property
-    def trend(self):
-        return self.__trend
 
     @property
     def station(self):

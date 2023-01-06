@@ -1,18 +1,81 @@
-from flask import Flask
+from pprint import pprint
+
+from flask import Flask, Response, jsonify, send_from_directory, url_for
 from flask_restful import Resource, Api
+from database import DatabaseConnector
+from gevent.pywsgi import WSGIServer
+
+import os
+
+db = DatabaseConnector()
+db.connect()
 
 
-app = Flask(__name__)
-api = Api(app)
+class Measurements(Resource):
 
-
-class Temperature(Resource):
     def get(self):
-        return {'hello': 'world'}
+        records = db.get(limit=10)
+
+        result = {}
+        for record in records:
+            sid = record[0]
+            timestamp = record[1]
+            station = record[2]
+            temperature = record[3]
+            humidity = record[4]
+
+            result[sid] = {
+                "timestamp": timestamp,
+                "station": station,
+                "temperature": temperature,
+                "humidity": humidity
+            }
+
+        json = jsonify(result)
+        return json
 
 
-api.add_resource(Temperature, '/')
+class MeasurementsChart(Resource):
+    def get(self):
+        temp_time_t1 = db.get_by_station(limit=30, station="T1")
+        temp_time_t2 = db.get_by_station(limit=30, station="T2")
+
+        labels = []
+        t1 = []
+        h1 = []
+        t2 = []
+        h2 = []
+
+        for temp, hum, time in temp_time_t1:
+            t1.append({"x": time, "y": temp})
+            h1.append({"x": time, "y": hum})
+            labels.append(time)
+
+        for temp, hum, time in temp_time_t2:
+            t2.append({"x": time, "y": temp})
+            h2.append({"x": time, "y": hum})
+            labels.append(time)
+
+        labels = list(dict.fromkeys(labels))
+        labels.sort()
+
+        result = {"t1": t1,
+                  "t2": t2,
+                  "h1": h1,
+                  "h2": h2,
+                  "labels": labels}
+
+        json = jsonify(result)
+        return json
 
 
 def run_server():
-    app.run(debug=True)
+    app = Flask(__name__,
+                static_url_path='/static')
+
+    api = Api(app)
+    api.add_resource(Measurements, '/measurements')
+    api.add_resource(MeasurementsChart, '/chart')
+
+    http_server = WSGIServer(("0.0.0.0", 8080), app)
+    http_server.serve_forever()

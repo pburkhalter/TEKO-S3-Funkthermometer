@@ -6,6 +6,8 @@ from restapi import run_server
 from datetime import datetime
 import RPi.GPIO as GPIO
 import argparse
+import os
+import sys
 
 
 GPIO_PIN = 23
@@ -30,6 +32,7 @@ if args.port:
     REMOTE_DEBUG_HOST = args.host
 
 
+"""
 try:
     # Try to connect to remote debugging instance (if server is listening)
     import pydevd_pycharm
@@ -40,7 +43,8 @@ try:
         stderrToServer=True)
 except (ImportError, ConnectionRefusedError):
     # We won't do anything here, just run local if the server is not listening
-    pass
+    # and reset stderr output
+"""
 
 
 def callback(channel):
@@ -58,29 +62,28 @@ def setup_callback(cb):
 
 def start_decoder(qq, dba):
     process = Process(target=SignalDecoder, args=(qq, dba))
-    process.daemon = True
+    process.daemon = False
     process.start()
     return process
 
 
-def start_restapi(qq):
-    process = Process(target=run_server, args=(qq))
-    process.daemon = True
+def start_restapi():
+    process = Process(target=run_server)
+    process.daemon = False
     process.start()
     return process
 
 
 if __name__ == '__main__':
-    print("This is a simple decoder for raw data captured on GPIO pin " + str(GPIO_PIN))
+    print("Starting Decoder...")
 
     decoder_queue = Queue()
-    restapi_queue = Queue()
 
     db = DatabaseConnector()
 
     setup_callback(callback)
 
-    #restapi_process = start_restapi(restapi_queue)
+    restapi_process = start_restapi()
     decoder_process = start_decoder(decoder_queue, db)
 
     decoder_process.join()
