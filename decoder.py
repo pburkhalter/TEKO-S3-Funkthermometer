@@ -187,7 +187,7 @@ class SignalGroup:
         verified = [list(i) for j, i in itertools.groupby(sorted(parts_list))]
 
         if verified:
-            self._signal = max(verified, key=len)
+            self._signal = max(verified[0], key=len)
             self.compute(self._signal)
 
             self._validated = True
