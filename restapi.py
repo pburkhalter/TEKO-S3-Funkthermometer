@@ -1,4 +1,4 @@
-from flask import Flask, Response, jsonify, send_from_directory, url_for
+from flask import Flask, Response, jsonify, send_from_directory, url_for, redirect
 from flask_restful import Resource, Api
 from flask.logging import default_handler
 from database import DatabaseConnector
@@ -76,6 +76,10 @@ def run_server():
 
     logger = logging.getLogger()
     logger.handlers[0].setFormatter(stream_formatter)
+
+    @app.route('/')
+    def index():
+        return redirect('/static/index.html')
 
     api = Api(app)
     api.add_resource(Measurements, '/measurements')
