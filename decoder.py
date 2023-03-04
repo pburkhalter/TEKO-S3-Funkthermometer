@@ -1,8 +1,8 @@
 import time
 import itertools
+import logging
 from datetime import datetime
 from bitstring import BitArray
-
 
 # ID1  ->    ID 1
 # CH   ->    Channel
@@ -18,18 +18,28 @@ from bitstring import BitArray
 # 0010  00  11  0  01  0  0001 1111 0100  1001 1111  1110   / -00 Grad (T2)  500 -> 00.000 Degree
 
 
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+
+
 class SignalDecoder:
 
     def __init__(self, queue, db):
-        self.pulse_length = [0, 250, 500, 750, 1000]
+        # predefined signal pulse-length
+        self.pulse_length = [0, 250, 500, 750]
+
+        # timeout indicating the end of a transmission
         self.part_timeout = 2000
 
+        # message queue receiving measurements from main process (gpio readings)
         self.queue = queue
-        self.db = db
 
-        # create initial group
+        # keep the last measurement for validation purposes
+        self.last_measurement = None
+
+        # create initial SignalGroup
         self.group = SignalGroup()
 
+        self.__db = db
         self.__running = False
         self.__distance = 0
         self.__timestamp = 0
@@ -38,11 +48,11 @@ class SignalDecoder:
 
     def start(self):
         # db connection
-        self.db.connect()
-        self.db.drop()
-        self.db.setup()
+        self.__db.connect()
+        self.__db.drop()
+        self.__db.setup()
 
-        # loop
+        # main loop
         self.__running = True
         while self.__running:
             if not self.queue.empty():
@@ -52,7 +62,7 @@ class SignalDecoder:
                 time.sleep(1)
 
     def stop(self):
-        self.__running = Falseva
+        self.__running = False
 
     def decode(self, item):
         timestamp, level = item
@@ -61,7 +71,7 @@ class SignalDecoder:
         # predefined timeout (offset). We assume we now have a
         # valid signal to save and will create a new group afterwards
         if timestamp > (self.__distance + self.part_timeout):
-            if self.group.valid:
+            if self.validate(self.group):
                 self.save(self.group)
                 self.out(self.group)
 
@@ -81,6 +91,18 @@ class SignalDecoder:
         if duration == 500:
             self.group.append(level)
 
+    def validate(self, group):
+        if not group.valid:
+            return False
+
+        if not self.last_measurement:
+            self.last_measurement = group
+
+        if not (self.last_measurement.temperature - 10) < group.temperature < (self.last_measurement.temperature + 10):
+            logging.debug(" Temperature out of range! Current: " + str(group.temperature) + " Last: " + str(self.last_measurement.temperature) + " (Tolerance: +/- 10 Degree)")
+            return False
+        return True
+
     def normalize(self, timestamp, level):
         calculated_duration = timestamp - self.__distance
         normalized_duration = self.pulse_length[min(range(len(self.pulse_length)),
@@ -90,7 +112,7 @@ class SignalDecoder:
         return [normalized_duration, level]
 
     def save(self, group):
-        self.db.add_measurement(
+        self.__db.add_measurement(
             group.station,
             group.datestring,
             group.temperature,
@@ -127,7 +149,7 @@ class SignalPart:
 
     def validate(self):
         # A valid signal consists of 36 bits. Return false if
-        # we don't have exactly 36 bits to filter them out
+        # we don't have exactly 36 bits to filter out erroneous signals
         if len(self._bits) == 36:
             self._validated = True
         else:
@@ -137,6 +159,10 @@ class SignalPart:
     @property
     def valid(self):
         return self.validate()
+
+    @property
+    def bits(self):
+        return self._bits
 
     def __len__(self):
         return len(self._bits)
@@ -177,22 +203,44 @@ class SignalGroup:
     def validate(self):
         parts_list = []
         for i, part in enumerate(self._parts):
-            # A valid signal consists of 36 bits. Delete parts that
+            # A valid signal consists of 36 bits. Skip parts that
             # don't have exactly 36 bits to filter them out
             if part.valid:
-                parts_list.append(part._bits)
+                parts_list.append(part.bits)
 
-        # group lists by frequency to hopefully find the correct
+        logging.debug(" SignalGroup holding " + str(len(self._parts)) + " part(s), of which " + str(len(parts_list)) + " are valid")
+
+        # group signals by occurrence to hopefully find the correct
         # signal, as we don't know how to compute the FCS (yet)
-        verified = [list(i) for j, i in itertools.groupby(sorted(parts_list))]
+        signal = [list(i) for j, i in itertools.groupby(sorted(parts_list))]
 
-        if verified:
-            self._signal = max(verified[0], key=len)
-            self.compute(self._signal)
+        if signal:
+            self._signal = max(signal, key=len)
+            self.compute(self._signal[0])
 
-            self._validated = True
-            return True
+            if len(signal[0]) < 3:
+                logging.debug(" Got " + str(len(signal[0])) + " valid SignalParts, but we need at least 3! Skipping...")
+
+            logging.debug(" Picking Signal with most occurrences: " + str(len(signal[0])) + " occurrences")
+
+            if self.check_values():
+                self._validated = True
+                return True
+
         return False
+
+    def check_values(self):
+        # Check the computed values if they seem valid
+        if self.__station == "Undefined":
+            print("Bad Station Name")
+            return False
+        if self.__battery == "Undefined":
+            print("Bad Battery Status")
+            return False
+        if not -20 < self.__temperature < 50:
+            print("Bad Temperature (out of valid range)")
+            return False
+        return True
 
     def compute(self, signal):
 

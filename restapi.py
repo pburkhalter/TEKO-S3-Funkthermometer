@@ -1,11 +1,9 @@
-from pprint import pprint
-
 from flask import Flask, Response, jsonify, send_from_directory, url_for
 from flask_restful import Resource, Api
+from flask.logging import default_handler
 from database import DatabaseConnector
 from gevent.pywsgi import WSGIServer
-
-import os
+import logging
 
 db = DatabaseConnector()
 db.connect()
@@ -70,12 +68,18 @@ class MeasurementsChart(Resource):
 
 
 def run_server():
-    app = Flask(__name__,
-                static_url_path='/static')
+    app = Flask(__name__, static_url_path='/static')
+
+    stream_handler = logging.StreamHandler()
+    stream_formatter = logging.Formatter('%(levelname)s: %(msg)s')
+    stream_handler.setFormatter(stream_formatter)
+
+    logger = logging.getLogger()
+    logger.handlers[0].setFormatter(stream_formatter)
 
     api = Api(app)
     api.add_resource(Measurements, '/measurements')
     api.add_resource(MeasurementsChart, '/chart')
 
-    http_server = WSGIServer(("0.0.0.0", 8080), app)
+    http_server = WSGIServer(("0.0.0.0", 8080), app, log=logger)
     http_server.serve_forever()
