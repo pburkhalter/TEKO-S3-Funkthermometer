@@ -96,7 +96,7 @@ def start_restapi():
 
 if __name__ == '__main__':
     print("*" * 80)
-    print("433Mhz Encoder for Weather-Thermometers (by Matthias Jakob & Patrik Burkhalter)")
+    print("433Mhz Decoder for Weather-Thermometers (by Matthias Jakob & Patrik Burkhalter)")
     print(" ")
     print("Access Webinterface on IP: " + get_ip_address('eth0') + ":8080 / Use CTRL + C to stop")
     print("*" * 80)
