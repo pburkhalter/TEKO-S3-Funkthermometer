@@ -2,7 +2,6 @@ import time
 import itertools
 from datetime import datetime
 from bitstring import BitArray
-from pprint import pprint
 
 
 # ID1  ->    ID 1
@@ -13,7 +12,7 @@ from pprint import pprint
 # B    ->    Battery changed
 # TEMP ->    Temperature (500 -> 00.000 Degree)
 # HUM  ->    Humidity
-# FCS  ->    Frame Check Sequence (only for Humidity?)
+# FCS  ->    Frame Check Sequence (XOR separate for temp and hum?)
 
 # ID1   CH  ID2 V  TR  B  TEMP            HUM        FCS
 # 0010  00  11  0  01  0  0001 1111 0100  1001 1111  1110   / -00 Grad (T2)  500 -> 00.000 Degree
@@ -102,7 +101,7 @@ class SignalDecoder:
         print("-" * 80)
         print("Temperature Recording: Station " + group.station + " @ " + group.datestring)
         print("-" * 80)
-        print("Signal Descrip: " + "Ch   -- ID ?? B  ^Temperature   Humidity  ????")
+        print("Signal Descrip: " + "Ch   00 ID ?? B  Temperature    Humidity  00 ??")
         print("Signal Encoded: " + group.bitstring)
         print(" ")
         print("Signal Decoded:")
@@ -208,7 +207,8 @@ class SignalGroup:
             _bitstring[20:24],
             _bitstring[24:28],
             _bitstring[28:32],
-            _bitstring[32:36]
+            _bitstring[32:34],
+            _bitstring[34:36]
         ]
 
         # Bitstring with visual separation
@@ -242,13 +242,13 @@ class SignalGroup:
         temperature = (temperature.uint - 500) / 10
 
         # Humidity
-        humidity = BitArray(bin=_bitstring[24:32])
+        humidity = BitArray(bin=_bitstring[25:32])
         humidity.invert()
-        humidity = (humidity.uint / 10) + 50
+        humidity = (humidity.uint / 2)
 
         # Datetime string
         datetime_ms = datetime.fromtimestamp(self._timestamp)
-        datetime_str = datetime_ms.strftime("%m/%d/%Y, %H:%M:%S")
+        datetime_str = datetime_ms.strftime("%d/%m/%Y, %H:%M:%S")
 
         self.__bitstring = bitstring_separated
         self.__temperature = temperature
