@@ -95,9 +95,6 @@ class SignalDecoder:
             group.datestring,
             group.temperature,
             group.humidity,
-        )
-        self.db.add_raw(
-            group.station,
             group.bitstring
         )
 
@@ -300,4 +297,3 @@ class SignalGroup:
     @property
     def datestring(self):
         return self.__datestring
-

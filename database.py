@@ -40,13 +40,6 @@ class DatabaseConnector:
                     humidity FLOAT
                 );
             """)
-            self.__cursor.execute("""
-                CREATE TABLE IF NOT EXISTS raw_data (
-                    id SERIAL,
-                    station TEXT,
-                    data VARCHAR(36)
-                );
-            """)
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while setting up the database")
 
@@ -87,16 +80,6 @@ class DatabaseConnector:
                   "timestamp": timestamp,
                   "temperature": temperature,
                   "humidity": humidity})
-        except psycopg2.errors as er:
-            raise DatabaseError("Something went wrong while adding data to the database")
-
-    def add_raw(self, station, data):
-        try:
-            self.__cursor.execute("""
-                INSERT INTO raw_data (station ,data)
-                VALUES (%(station)s, %(data)s);
-            """, {"station": station,
-                  "data": data})
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while adding data to the database")
 
