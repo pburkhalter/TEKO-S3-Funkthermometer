@@ -103,7 +103,7 @@ class SignalDecoder:
         print("Temperature Recording: Station " + group.station + " @ " + group.datestring)
         print("-" * 80)
         print("Signal Descrip: " + "Ch   00 ID ?? B  Temperature    Humidity  00 ??")
-        print("Signal Encoded: " + group.bitstring)
+        print("Signal Encoded: " + group.bitstring_nice)
         print(" ")
         print("Signal Decoded:")
         print("Channel:\t\t" + str(group.channel))
@@ -151,6 +151,7 @@ class SignalGroup:
 
         # computed attributes
         self.__bitstring = None
+        self.__bitstring_nice = None
         self.__channel = None
         self.__battery = None
         self.__station = None
@@ -251,7 +252,8 @@ class SignalGroup:
         datetime_ms = datetime.fromtimestamp(self._timestamp)
         datetime_str = datetime_ms.strftime("%d/%m/%Y, %H:%M:%S")
 
-        self.__bitstring = bitstring_separated
+        self.__bitstring = _bitstring
+        self.__bitstring_nice = bitstring_separated
         self.__temperature = temperature
         self.__humidity = humidity
         self.__channel = channel
@@ -273,6 +275,10 @@ class SignalGroup:
     @property
     def bitstring(self):
         return self.__bitstring
+
+    @property
+    def bitstring_nice(self):
+        return self.__bitstring_nice
 
     @property
     def channel(self):

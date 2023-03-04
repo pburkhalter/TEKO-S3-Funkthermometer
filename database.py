@@ -34,10 +34,11 @@ class DatabaseConnector:
             self.__cursor.execute("""
                 CREATE TABLE IF NOT EXISTS measurement (
                     id SERIAL,
-                    station TEXT,
+                    station VARCHAR(2),
                     timestamp TIMESTAMP,
                     temperature FLOAT,
-                    humidity FLOAT
+                    humidity FLOAT,
+                    raw VARCHAR(36)
                 );
             """)
         except psycopg2.errors as er:
@@ -71,15 +72,16 @@ class DatabaseConnector:
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while reading from the database")
 
-    def add_measurement(self, station, timestamp, temperature, humidity):
+    def add_measurement(self, station, timestamp, temperature, humidity, raw):
         try:
             self.__cursor.execute("""
-                INSERT INTO measurement (station ,timestamp ,temperature ,humidity)
-                VALUES (%(station)s, %(timestamp)s, %(temperature)s, %(humidity)s);
+                INSERT INTO measurement (station ,timestamp ,temperature ,humidity ,raw)
+                VALUES (%(station)s, %(timestamp)s, %(temperature)s, %(humidity)s, %(raw)s);
             """, {"station": station,
                   "timestamp": timestamp,
                   "temperature": temperature,
-                  "humidity": humidity})
+                  "humidity": humidity,
+                  "raw": raw})
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while adding data to the database")
 
