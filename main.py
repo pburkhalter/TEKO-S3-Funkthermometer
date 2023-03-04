@@ -1,13 +1,17 @@
+import fcntl
+import socket
+import struct
+import signal
 import time
+import RPi.GPIO as GPIO
+import argparse
 from multiprocessing import Process, Queue
 from decoder import SignalDecoder
 from database import DatabaseConnector
 from restapi import run_server
 from datetime import datetime
-import RPi.GPIO as GPIO
-import argparse
-import os
-import sys
+from multiprocessing import active_children
+
 
 
 GPIO_PIN = 23
@@ -47,6 +51,22 @@ except (ImportError, ConnectionRefusedError):
 """
 
 
+def exit_handler(signum, frame):
+    for child in active_children():
+        child.terminate()
+    exit(1)
+
+
+# https://stackoverflow.com/questions/24196932/how-can-i-get-the-ip-address-from-a-nic-network-interface-controller-in-python
+def get_ip_address(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(fcntl.ioctl(
+        s.fileno(),
+        0x8915,  # SIOCGIFADDR
+        struct.pack('256s', bytes(ifname[:15], 'utf-8'))
+    )[20:24])
+
+
 def callback(channel):
     # Callback for GPIO event detection
     level = GPIO.input(channel)
@@ -75,19 +95,20 @@ def start_restapi():
 
 
 if __name__ == '__main__':
-    print("Starting Decoder...")
+    print("*" * 80)
+    print("433Mhz Encoder for Weather-Thermometers (by Matthias Jakob & Patrik Burkhalter)")
+    print(" ")
+    print("Access Webinterface on IP: " + get_ip_address('eth0') + ":8080 / Use CTRL + C to stop")
+    print("*" * 80)
+
+    signal.signal(signal.SIGINT, exit_handler)
 
     decoder_queue = Queue()
-
     db = DatabaseConnector()
-
     setup_callback(callback)
 
     restapi_process = start_restapi()
     decoder_process = start_decoder(decoder_queue, db)
-
     decoder_process.join()
 
-    while True:
-        time.sleep(1)
 
