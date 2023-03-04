@@ -20,7 +20,7 @@ class DatabaseConnector:
                 password="measurement"
             )
         except psycopg2.errors as er:
-            raise DatabaseError("Something went wrong while setting up the database")
+            raise DatabaseError("Something went wrong while connecting to the database")
 
         self.__connection.autocommit = True
         self.__cursor = self.__connection.cursor()
@@ -40,10 +40,17 @@ class DatabaseConnector:
                     humidity FLOAT
                 );
             """)
+            self.__cursor.execute("""
+                CREATE TABLE IF NOT EXISTS raw_data (
+                    id SERIAL,
+                    station TEXT,
+                    data VARCHAR(36)
+                );
+            """)
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while setting up the database")
 
-    def get(self, limit=1):
+    def get_measurement(self, limit=1):
         try:
             self.__cursor.execute("""
                 SELECT *
@@ -56,7 +63,7 @@ class DatabaseConnector:
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while reading from the database")
 
-    def get_by_station(self, limit=1, station="T1"):
+    def get_measurement_by_station(self, limit=1, station="T1"):
         try:
             self.__cursor.execute("""
                 SELECT temperature, humidity, timestamp
@@ -71,7 +78,7 @@ class DatabaseConnector:
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while reading from the database")
 
-    def add(self, station, timestamp, temperature, humidity):
+    def add_measurement(self, station, timestamp, temperature, humidity):
         try:
             self.__cursor.execute("""
                 INSERT INTO measurement (station ,timestamp ,temperature ,humidity)
@@ -83,8 +90,15 @@ class DatabaseConnector:
         except psycopg2.errors as er:
             raise DatabaseError("Something went wrong while adding data to the database")
 
-    def remove(self, sid):
-        pass
+    def add_raw(self, station, data):
+        try:
+            self.__cursor.execute("""
+                INSERT INTO raw_data (station ,data)
+                VALUES (%(station)s, %(data)s);
+            """, {"station": station,
+                  "data": data})
+        except psycopg2.errors as er:
+            raise DatabaseError("Something went wrong while adding data to the database")
 
     def clean(self):
         pass

@@ -14,7 +14,7 @@ db.connect()
 class Measurements(Resource):
 
     def get(self):
-        records = db.get(limit=10)
+        records = db.get_measurement(limit=10)
 
         result = {}
         for record in records:
@@ -37,8 +37,8 @@ class Measurements(Resource):
 
 class MeasurementsChart(Resource):
     def get(self):
-        temp_time_t1 = db.get_by_station(limit=30, station="T1")
-        temp_time_t2 = db.get_by_station(limit=30, station="T2")
+        temp_time_t1 = db.get_measurement_by_station(limit=30, station="T1")
+        temp_time_t2 = db.get_measurement_by_station(limit=30, station="T2")
 
         labels = []
         t1 = []

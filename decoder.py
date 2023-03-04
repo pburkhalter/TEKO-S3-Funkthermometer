@@ -90,11 +90,15 @@ class SignalDecoder:
         return [normalized_duration, level]
 
     def save(self, group):
-        self.db.add(
+        self.db.add_measurement(
             group.station,
             group.datestring,
             group.temperature,
             group.humidity,
+        )
+        self.db.add_raw(
+            group.station,
+            group.bitstring
         )
 
     def out(self, group):
