@@ -6,7 +6,7 @@ from piscope.decoder import Decoder
 if __name__ == '__main__':
     print("This is a simple decoder for raw piscope data captured from a 433Mhz-Thermometer")
     # filepath = input("Please enter the filepath for the raw data: ")
-    filepath = "/Users/patrik.burkhalter/433mhz_sample"
+    filepath = "raw_dump"
 
     raw_decoder = Decoder()
     result = raw_decoder.decode(filepath)
